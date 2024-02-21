@@ -1,5 +1,15 @@
-create schema tiendas;
-use tiendas;
+CREATE SCHEMA tiendas;
+USE tiendas;
+
+-- Tabla de auditoria de ventas
+CREATE TABLE AuditoriaVentas (
+    id_log INT PRIMARY KEY AUTO_INCREMENT,
+    id_venta INT,
+    accion VARCHAR(50),
+    fecha_accion DATETIME,
+    usuario VARCHAR(50)
+);
+
 -- Tabla para clientes
 CREATE TABLE Clientes (
     id_cliente INT PRIMARY KEY,
@@ -19,7 +29,8 @@ CREATE TABLE Productos (
 CREATE TABLE Pedidos (
     id_pedido INT PRIMARY KEY,
     id_cliente INT,
-    fecha_pedido DATE
+    fecha_pedido DATE,
+    FOREIGN KEY (id_cliente) REFERENCES Clientes(id_cliente)
 );
 
 -- Tabla para detalles de pedido
@@ -28,7 +39,32 @@ CREATE TABLE DetallesPedido (
     id_pedido INT,
     id_producto INT,
     cantidad INT,
-    precio_unitario DECIMAL(10, 2)
+    precio_unitario DECIMAL(10, 2),
+    FOREIGN KEY (id_pedido) REFERENCES Pedidos(id_pedido),
+    FOREIGN KEY (id_producto) REFERENCES Productos(id_producto)
+);
+
+-- Crear la tabla Proveedor
+CREATE TABLE Proveedor (
+    id_compra INT PRIMARY KEY,
+    id_producto INT,
+    cantidad INT,
+    precio_unitario DECIMAL(10, 2),
+    fecha_compra DATE,
+    proveedor VARCHAR(50),
+    FOREIGN KEY (id_producto) REFERENCES Productos(id_producto)
+);
+
+-- Crear la tabla ComprasProveedor
+CREATE TABLE ComprasProveedor (
+    id_compra_proveedor INT PRIMARY KEY,
+    id_compra INT,
+    id_producto INT,
+    cantidad INT,
+    precio_unitario DECIMAL(10, 2),
+    fecha_compra DATE,
+    FOREIGN KEY (id_compra) REFERENCES Proveedor(id_compra),
+    FOREIGN KEY (id_producto) REFERENCES Productos(id_producto)
 );
 
 -- Agregar claves foráneas
@@ -61,16 +97,16 @@ VALUES
 -- Datos en la tabla Productos
 INSERT INTO Productos (id_producto, nombre, precio)
 VALUES 
-    (1, 'Producto A', 20.99),
-    (2, 'Producto B', 15.50),
-    (3, 'Producto C', 30.25),
-    (4, 'Producto D', 10.75),
-    (5, 'Producto E', 25.00),
-    (6, 'Producto F', 18.99),
-    (7, 'Producto G', 22.50),
-    (8, 'Producto H', 12.25),
-    (9, 'Producto I', 28.75),
-    (10, 'Producto J', 19.50);
+    (1, 'Samsung Galaxy S21', 20.99),
+    (2, 'iPhone 13', 15.50),
+    (3, 'Google Pixel 6', 30.25),
+    (4, 'OnePlus 9', 10.75),
+    (5, 'Xiaomi Mi 11', 25.00),
+    (6, 'Huawei P40', 18.99),
+    (7, 'Sony Xperia 5 II', 22.50),
+    (8, 'LG Velvet', 12.25),
+    (9, 'Motorola Moto G Power', 28.75),
+    (10, 'Nokia 8.3', 19.50);
 
 -- Datos en la tabla Pedidos
 INSERT INTO Pedidos (id_pedido, id_cliente, fecha_pedido)
@@ -100,7 +136,31 @@ VALUES
     (9, 9, 7, 1, 22.50),
     (10, 10, 6, 4, 18.99);
     
-    -- Vista que muestra los clientes que realizaron compras y el nombre del producto
+-- Insertar datos adicionales en la tabla Proveedor
+INSERT INTO Proveedor (id_compra, id_producto, cantidad, precio_unitario, fecha_compra, proveedor)
+VALUES 
+    (8, 6, 60, 17.25, '2024-02-27', 'TechHub Distributors'),
+    (9, 9, 110, 25.50, '2024-03-05', 'Mobile World Suppliers'),
+    (10, 3, 30, 28.75, '2024-03-10', 'ConnectX Electronics'),
+    (11, 7, 80, 21.00, '2024-03-15', 'Innovative Devices Co.'),
+    (12, 5, 55, 24.99, '2024-03-20', 'GlobeTech Solutions'),
+    (13, 1, 70, 18.99, '2024-03-25', 'SmartDeals Limited'),
+    (14, 8, 45, 12.25, '2024-03-30', 'TechConnect Ventures'),
+    (15, 10, 100, 19.50, '2024-04-05', 'Global Mobile Distributors'),
+    (16, 2, 25, 15.50, '2024-04-10', 'TopTech Solutions'),
+    (17, 3, 50, 30.25, '2024-04-15', 'Future Gadgets Inc.');
+    
+-- Insertar más datos en la tabla ComprasProveedor
+INSERT INTO ComprasProveedor (id_compra_proveedor, id_compra, id_producto, cantidad, precio_unitario, fecha_compra)
+VALUES 
+    (6, 8, 6, 20, 15.75, '2024-06-01'),
+    (7, 9, 1, 35, 28.50, '2024-06-05'),
+    (8, 10, 4, 50, 10.50, '2024-06-10'),
+    (9, 11, 7, 15, 23.00, '2024-06-15'),
+    (10, 12, 2, 25, 14.25, '2024-06-20');
+
+
+-- Vista que muestra los clientes que realizaron compras y el nombre del producto
 CREATE VIEW clientes_compras AS
 SELECT
     c.id_cliente,
@@ -114,5 +174,166 @@ JOIN
     DetallesPedido dp ON pe.id_pedido = dp.id_pedido
 JOIN
     Productos p ON dp.id_producto = p.id_producto;
+    
+-- Vista que muestra la cantidad de ventas realizadas por producto
+CREATE VIEW ventas_por_producto AS
+SELECT
+    dp.id_producto,
+    p.nombre AS nombre_producto,
+    COUNT(dp.id_detalle) AS cantidad_ventas
+FROM
+    DetallesPedido dp
+JOIN
+    Productos p ON dp.id_producto = p.id_producto
+GROUP BY
+    dp.id_producto, p.nombre;
 
+DELIMITER //
 
+CREATE FUNCTION f_calcular_porcentaje_ganancia(
+    id_detalle_pedido INT
+) RETURNS DECIMAL(5, 2) DETERMINISTIC
+BEGIN
+    DECLARE precio_compra DECIMAL(10, 2);
+    DECLARE precio_venta DECIMAL(10, 2);
+    DECLARE porcentaje_ganancia DECIMAL(5, 2);
+
+    -- Obtener el precio de compra
+    SELECT precio_unitario
+    INTO precio_compra
+    FROM DetallesPedido
+    WHERE id_detalle = id_detalle_pedido;
+
+    -- Obtener el precio de venta (asumiendo que hay una tabla con precios de venta)
+    SELECT precio
+    INTO precio_venta
+    FROM Productos
+    WHERE id_producto = (
+        SELECT id_producto
+        FROM DetallesPedido
+        WHERE id_detalle = id_detalle_pedido
+    );
+
+    -- Calcular el porcentaje de ganancia
+    SET porcentaje_ganancia = ((precio_venta - precio_compra) / precio_compra) * 100;
+
+    RETURN porcentaje_ganancia;
+END //
+
+DELIMITER ;
+
+-- Crear un procedimiento almacenado para ajustar los precios de los productos
+DELIMITER //
+
+CREATE PROCEDURE sp_ajustar_precios_ganancia()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE id_prod INT;
+    DECLARE precio_compra DECIMAL(10, 2);
+    DECLARE precio_venta DECIMAL(10, 2);
+    DECLARE porcentaje_ganancia DECIMAL(5, 2);
+    
+    -- Cursor para obtener productos
+    DECLARE cur_prod CURSOR FOR
+        SELECT id_producto, precio FROM Productos;
+    
+    -- Manejo de errores
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur_prod;
+
+    read_loop: LOOP
+        FETCH cur_prod INTO id_prod, precio_compra;
+
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+
+        -- Obtener el precio de venta actual
+        SELECT precio INTO precio_venta
+        FROM Productos
+        WHERE id_producto = id_prod;
+
+        -- Calcular el porcentaje de ganancia actual
+        SET porcentaje_ganancia = ((precio_venta - precio_compra) / precio_compra) * 100;
+
+        -- Si la ganancia es menor al 25%, ajustar el precio de venta
+        IF porcentaje_ganancia < 25 THEN
+            UPDATE Productos
+            SET precio = precio_compra * 1.25
+            WHERE id_producto = id_prod;
+        END IF;
+    END LOOP;
+
+    CLOSE cur_prod;
+END //
+
+DELIMITER ;
+
+-- Modificar el procedimiento almacenado para aplicar un 10% de descuento
+DELIMITER //
+
+CREATE PROCEDURE sp_aplicar_descuento_productos()
+BEGIN
+    DECLARE id_prod INT;
+    DECLARE cantidad_ventas INT;
+    
+    -- Cursor para obtener la cantidad de ventas por producto
+    DECLARE cur_ventas CURSOR FOR
+        SELECT dp.id_producto, COUNT(dp.id_detalle) AS cantidad_ventas
+        FROM DetallesPedido dp
+        GROUP BY dp.id_producto;
+
+    OPEN cur_ventas;
+
+    read_loop: LOOP
+        FETCH cur_ventas INTO id_prod, cantidad_ventas;
+
+        IF id_prod IS NULL THEN
+            LEAVE read_loop;
+        END IF;
+
+        -- Imprimir información para depuración
+        SELECT CONCAT('Producto ID: ', id_prod, ', Cantidad de Ventas: ', cantidad_ventas) AS InfoDebug;
+
+        -- Verificar si la cantidad de ventas es menor o igual a 1 (menos vendido)
+        IF cantidad_ventas <= 1 THEN
+            -- Aplicar un descuento del 10%
+            UPDATE Productos
+            SET precio = precio * 0.90
+            WHERE id_producto = id_prod;
+        END IF;
+    END LOOP;
+
+    CLOSE cur_ventas;
+END //
+
+DELIMITER ;
+
+-- Trigger para auditar ventas después de realizarlas
+DELIMITER //
+CREATE TRIGGER after_insert_venta
+AFTER INSERT ON Pedidos
+FOR EACH ROW
+BEGIN
+    DECLARE usuario_actual VARCHAR(50);
+    SET usuario_actual = USER();
+
+    INSERT INTO AuditoriaVentas (id_venta, accion, fecha_accion, usuario)
+    VALUES (NEW.id_pedido, 'Inserción (Venta realizada)', NOW(), usuario_actual);
+END //
+DELIMITER ;
+
+-- Trigger para auditar antes de borrar una venta
+DELIMITER //
+CREATE TRIGGER before_delete_venta
+BEFORE DELETE ON Pedidos
+FOR EACH ROW
+BEGIN
+    DECLARE usuario_actual VARCHAR(50);
+    SET usuario_actual = USER();
+
+    INSERT INTO AuditoriaVentas (id_venta, accion, fecha_accion, usuario)
+    VALUES (OLD.id_pedido, 'Eliminación (Venta cancelada)', NOW(), usuario_actual);
+END //
+DELIMITER ;
